@@ -1,0 +1,9 @@
+{
+  "name": "El Cid Handicap Search",
+  "short_name": "El Cid HCP",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f5f4",
+  "theme_color": "#0b5d3b",
+  "icons": []
+}
