@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b5d3b">
+<title>El Cid Handicap Search</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: #f3f5f4;
+    color: #17201c;
+  }
+  .wrap { max-width: 700px; margin: 0 auto; padding: 18px 14px 32px; }
+  h1 { text-align:center; margin: 4px 0 3px; font-size: 28px; letter-spacing:.5px; }
+  .sub { text-align:center; color:#5c6862; font-size:14px; margin-bottom:16px; }
+  .searchbox {
+    background:#fff; border-radius:16px; padding:14px;
+    box-shadow:0 2px 10px rgba(0,0,0,.08); margin-bottom:14px;
+  }
+  label { display:block; font-weight:700; margin-bottom:7px; }
+  .row { display:flex; gap:8px; }
+  input {
+    flex:1; min-width:0; font-size:18px; padding:13px 12px;
+    border:1px solid #c8d0cc; border-radius:11px; outline:none;
+  }
+  input:focus { border-color:#0b5d3b; box-shadow:0 0 0 2px rgba(11,93,59,.12); }
+  button {
+    border:0; border-radius:11px; padding:12px 17px; font-size:17px;
+    font-weight:700; background:#0b5d3b; color:#fff;
+  }
+  button:active { transform:scale(.98); }
+  .status { text-align:center; color:#68736e; font-size:13px; min-height:20px; margin-top:8px; }
+  .error { color:#a12626; }
+  .match {
+    background:#fff; border-radius:16px; padding:15px; margin-bottom:14px;
+    box-shadow:0 2px 10px rgba(0,0,0,.08);
+  }
+  .name { font-size:24px; font-weight:800; }
+  .meta { margin-top:4px; color:#59655f; font-size:15px; }
+  .course { margin-top:14px; border:1px solid #d9dfdc; border-radius:13px; overflow:hidden; }
+  .course-title {
+    background:#eaf1ed; padding:10px 12px; font-weight:800; font-size:18px;
+  }
+  .grid {
+    display:grid; grid-template-columns: repeat(5, 1fr);
+  }
+  .cell { text-align:center; padding:9px 3px; border-right:1px solid #e1e5e3; }
+  .cell:last-child { border-right:0; }
+  .tee { font-size:11px; font-weight:800; color:#66716c; }
+  .hcp { font-size:22px; font-weight:800; margin-top:3px; }
+  .blank { color:#a1aaa6; font-weight:500; }
+  .footer { text-align:center; color:#7a8580; font-size:12px; margin-top:18px; }
+  .hidden { display:none; }
+  @media (max-width:430px) {
+    .wrap { padding-left:10px; padding-right:10px; }
+    .grid { grid-template-columns: repeat(5, 1fr); }
+    .hcp { font-size:20px; }
+    .tee { font-size:10px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>EL CID HANDICAPS</h1>
+  <div class="sub">Search a player to see playing handicaps by course and tee</div>
+
+  <div class="searchbox">
+    <label for="search">Player Name</label>
+    <div class="row">
+      <input id="search" type="search" placeholder="Enter last or full name" autocomplete="off">
+      <button id="searchBtn">Search</button>
+    </div>
+    <div id="status" class="status">Loading weekly handicap sheet…</div>
+  </div>
+
+  <div id="results"></div>
+  <div class="footer">The app reads El_Cid_Handicaps.pdf from this GitHub site.</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const PDF_FILE = "El_Cid_Handicaps.pdf";
+const courseNames = ["Moro/Castilla", "Moro/Marina", "Castilla/Marina"];
+const tees = ["Orgn", "Red", "GOLD", "MIXED", "WHITE"];
+const teeCenters = [179.0, 199.3, 230.4, 264.6, 295.7, 321.0, 343.3, 371.6, 405.8, 437.0, 462.3, 484.6, 512.9, 547.1, 578.3];
+
+let players = [];
+let loaded = false;
+
+function setStatus(msg, error=false) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = "status" + (error ? " error" : "");
+}
+
+function normalize(s) {
+  return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function normalizeItems(items) {
+  return items.map(w => {
+    const x0 = w.transform ? w.transform[4] : w.x0;
+    const y = w.transform ? w.transform[5] : w.top;
+    const width = w.width || 0;
+    const text = (w.str !== undefined ? w.str : w.text || "").trim();
+    return { x0, x1: x0 + width, top: y, text };
+  }).filter(w => w.text);
+}
+
+function groupRows(items) {
+  const normalized = normalizeItems(items);
+  const sorted = normalized.slice().sort((a,b) => a.top - b.top || a.x0 - b.x0);
+  const rows = [];
+  for (const w of sorted) {
+    let row = rows.find(r => Math.abs(r.top - w.top) < 2.0);
+    if (!row) { row = {top:w.top, words:[]}; rows.push(row); }
+    row.words.push(w);
+  }
+  return rows.sort((a,b)=>a.top-b.top);
+}
+
+function parsePage(items) {
+  const rows = groupRows(items);
+  const out = [];
+  for (const r of rows) {
+    const left = r.words.filter(w => w.x0 < 110);
+    const hi = r.words.find(w => w.x0 >= 105 && w.x0 < 135 && /^[0-9]+(?:\.[0-9]+)?$/.test(w.text));
+    const tee = r.words.find(w => w.x0 >= 135 && w.x0 < 175 && /^[A-Za-z]+$/.test(w.text));
+    if (!left.length || !hi || !tee) continue;
+
+    const name = left.map(w => w.text).join(" ").trim();
+    if (!name || name === "Name") continue;
+
+    const vals = Array(15).fill("");
+    for (const w of r.words) {
+      const n = Number(w.text);
+      if (!Number.isInteger(n) || n < 0 || n > 60) continue;
+      const center = (w.x0 + w.x1) / 2;
+      let best = -1, dist = 999;
+      teeCenters.forEach((c,i) => {
+        const d = Math.abs(center-c);
+        if (d < dist) { dist=d; best=i; }
+      });
+      if (best >= 0 && dist < 8) vals[best] = String(n);
+    }
+    out.push({name, hi:hi.text, listedTee:tee.text, vals});
+  }
+  return out;
+}
+
+async function loadPDF() {
+  try {
+    // Cache-bust so replacing the weekly PDF on GitHub is picked up immediately.
+    const url = PDF_FILE + "?v=" + Date.now();
+    const pdf = await pdfjsLib.getDocument({url, cache: "no-store"}).promise;
+    let all = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      all = all.concat(parsePage(content.items));
+    }
+    players = all;
+    loaded = true;
+    setStatus("Weekly handicap sheet loaded • " + players.length + " players");
+  } catch (e) {
+    console.error(e);
+    setStatus("Could not load El_Cid_Handicaps.pdf", true);
+  }
+}
+
+function renderPlayer(p) {
+  let html = `<div class="match">
+    <div class="name">${escapeHtml(p.name)}</div>
+    <div class="meta">H.I. ${escapeHtml(p.hi)} &nbsp; • &nbsp; Listed Tee: ${escapeHtml(p.listedTee)}</div>`;
+
+  for (let c=0; c<3; c++) {
+    html += `<div class="course">
+      <div class="course-title">${courseNames[c]}</div>
+      <div class="grid">`;
+    for (let t=0; t<5; t++) {
+      const v = p.vals[c*5+t];
+      html += `<div class="cell"><div class="tee">${tees[t]}</div>
+        <div class="hcp ${v ? "" : "blank"}">${v || "—"}</div></div>`;
+    }
+    html += `</div></div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
+}
+
+function searchPlayer() {
+  const q = normalize(document.getElementById("search").value);
+  const results = document.getElementById("results");
+  if (!loaded) { setStatus("Still loading the weekly handicap sheet…", true); return; }
+  if (!q) { results.innerHTML = ""; setStatus("Enter a player name."); return; }
+
+  const exact = players.filter(p => normalize(p.name) === q);
+  const matches = exact.length ? exact : players.filter(p => normalize(p.name).includes(q));
+
+  if (!matches.length) {
+    results.innerHTML = "";
+    setStatus("No player found.", true);
+    return;
+  }
+  if (matches.length > 1) {
+    setStatus(matches.length + " players found");
+  } else {
+    setStatus("Player found");
+  }
+  results.innerHTML = matches.map(renderPlayer).join("");
+}
+
+document.getElementById("searchBtn").addEventListener("click", searchPlayer);
+document.getElementById("search").addEventListener("keydown", e => {
+  if (e.key === "Enter") searchPlayer();
+});
+loadPDF();
+</script>
+</body>
+</html>
