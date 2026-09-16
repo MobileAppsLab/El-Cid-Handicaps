@@ -67,7 +67,7 @@
 <body>
 <div class="wrap">
   <h1>EL CID HANDICAPS</h1>
-  <div class="sub">Search a player to see playing handicaps</div>
+  <div class="sub">Search a player to see playing handicaps by course and tee</div>
   <div id="revisionDate" class="revision">Revision Date: Loading...</div>
 
   <div class="searchbox">
@@ -220,7 +220,13 @@ function searchPlayer() {
   const q = normalize(document.getElementById("search").value);
   const results = document.getElementById("results");
   if (!loaded) { setStatus("Still loading the weekly handicap sheet…", true); return; }
-  if (!q) { results.innerHTML = ""; setStatus("Enter a player name."); return; }
+  if (!q) {
+    if (!players.length) { results.innerHTML = ""; setStatus("No players found.", true); return; }
+    const allPlayers = players.slice().sort((a,b) => a.name.localeCompare(b.name, undefined, {sensitivity:"base"}));
+    results.innerHTML = allPlayers.map(renderPlayer).join("");
+    setStatus("Showing all " + allPlayers.length + " players");
+    return;
+  }
 
   const exact = players.filter(p => normalize(p.name) === q);
   const matches = exact.length ? exact : players.filter(p => normalize(p.name).includes(q));
