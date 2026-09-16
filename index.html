@@ -73,10 +73,10 @@
   <div class="searchbox">
     <label for="search">Player Name</label>
     <div class="row">
-      <input id="search" type="search" placeholder="Enter Name or Search for All" autocomplete="off">
+      <input id="search" type="search" placeholder="Name or Search for All" autocomplete="off">
       <button id="searchBtn">Search</button>
     </div>
-    <div id="status" class="status">Loading weekly handicap sheet…</div>
+    <div id="status" class="status">Loading handicap sheet…</div>
   </div>
 
   <div id="results"></div>
@@ -183,7 +183,7 @@ async function loadPDF() {
       "Revision Date: " + (revision || "Not found");
 
     loaded = true;
-    setStatus("Weekly handicap sheet loaded • " + players.length + " players");
+    setStatus("Handicap sheet loaded • " + players.length + " players");
   } catch (e) {
     console.error(e);
     setStatus("Could not load El_Cid_Handicaps.pdf", true);
