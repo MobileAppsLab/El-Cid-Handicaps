@@ -248,7 +248,10 @@ document.getElementById("searchBtn").addEventListener("click", searchPlayer);
 document.getElementById("search").addEventListener("keydown", e => {
   if (e.key === "Enter") searchPlayer();
 });
-loadPDF();
+
+loadPDF().then(() => {
+  searchPlayer();
+});
 </script>
 </body>
 </html>
